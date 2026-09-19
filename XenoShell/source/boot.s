@@ -1,21 +1,13 @@
-
-
 .global _start
 .global main
 
-.global szDriveVer
-
-.global szIPL
-.global szNTSC10
-.global szXeno
-
 _start:
-lis 1, 0x817F
-b main
+	lis 1, 0x817F
+	b main
 
 .global __eabi
 __eabi:
-blr
+	blr
 
 .globl GetMSR
 GetMSR:
@@ -26,12 +18,12 @@ GetMSR:
 SetMSR:
 	mtmsr 3
 	blr
-	
+
 .globl dcache_flush_icache_inv
 dcache_flush_icache_inv:
 	clrlwi. 5, 3, 27  # check for lower bits set in address
 	beq 1f
-	addi 4, 4, 0x20 
+	addi 4, 4, 0x20
 1:
 	addi 4, 4, 0x1f
 	srwi 4, 4, 5
@@ -45,5 +37,3 @@ dcache_flush_icache_inv:
 	sync
 	isync
 	blr
-
-szDriveVer:		.string "  Drive Version X";

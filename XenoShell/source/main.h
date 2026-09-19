@@ -1,137 +1,99 @@
+/*
+ * main.h - XenoBoot memory card loader: types, hardware registers and the
+ *          on-card data structures (see libogc card.c / YAGCD 10.4).
+ */
+#ifndef MAIN_H
+#define MAIN_H
 
-typedef unsigned long  u32;
+typedef unsigned int   u32;
 typedef unsigned short u16;
 typedef unsigned char  u8;
 
-typedef volatile u8		vu8;
-typedef volatile u16	vu16;
-typedef volatile u32	vu32;
+#define REG32(a) (*(volatile u32 *)(a))
+#define REG16(a) (*(volatile u16 *)(a))
 
-#define BS_ADDRESS 0x80800000
+/* memory layout used by the loader */
+#define LOADER_ADDRESS 0x81500000u  /* where stub.c unpacks this program to (see link.lds) */
+#define HDR_ADDRESS   0x80700000u   /* card system area: blocks 0-4 (5 x 8 KB)   */
+#define DOL_ADDRESS   0x80800000u   /* xeno.dol is staged here before launching */
+#define MEM_FB        0xC0F00000u   /* framebuffer (uncached)                    */
+#define MEM_FB2       (MEM_FB + 0x500u)
+#define YBORDEROFFSET (640u * 2u * 32u)
+#define GC_INIT_BASE  0x80000020u
+#define VI_BASE       0xCC002000u
+#define VI_BASE2      0xCC002040u
+#define R_VIDEO_FRAMEBUFFER_1 REG32(0xCC00201Cu)
+#define R_VIDEO_FRAMEBUFFER_2 REG32(0xCC002024u)
 
-/*** memory layout ***/
-#define MEM_TEMP		0x81000000
-#define MEM_WORK		0x81010000
-#define MEM_FONT		0x81020000
-#define MEM_FB			((0xC0F00000))	// 80080000
-#define MEM_FB2			((MEM_FB + 0x500))
+/* EXI channel register base: channel n at 0xCC006800 + n*0x14 */
+#define EXI_CHANNEL_BASE(n) (0xCC006800u + (n) * 0x14u)
+#define EXI_SPEED1MHZ  0
+#define EXI_SPEED8MHZ  3
+#define EXI_SPEED16MHZ 4
+#define EXI_CSR_EXT    0x1000u      /* device present */
 
-#define GC_INIT_BASE		 (0x80000020)
-#define GC_INIT_BASE_PTR	(u32*)GC_INIT_BASE
+/* DSP registers (u16), offsets from 0xCC005000 */
+#define DSP_REG(n)     REG16(0xCC005000u + (n) * 2u)
+#define DSPCR_RES      0x0001u
+#define DSPCR_PIINT    0x0002u
+#define DSPCR_HALT     0x0004u
+#define DSPCR_AIINT    0x0008u
+#define DSPCR_ARINT    0x0020u
+#define DSPCR_DSPINT   0x0080u
+#define DSPCR_DSPRESET 0x0800u
 
-/*** video stuff ***/
-#define VI_BASE			(u32*) 0xCC002000
-#define VI_BASE2		(u32*) 0xCC002040
-#define MBLIST_Y		(3 * 24)
+/* memory card */
+#define MEMCARD_BLOCK_SIZE 0x2000u
+#define MEMCARD_PAGE_SIZE  0x200u
+#define CARD_STATUS_UNLOCKED 0x40u
+#define DIRECTORY_SIZE 127
+#define LAST_BLOCK 0xFFFFu
+#define XENO_DOL_NAME "xeno.dol"
 
-#define R_VIDEO_FRAMEBUFFER_1	*(unsigned long*)0xCC00201C
-#define R_VIDEO_FRAMEBUFFER_2	*(unsigned long*)0xCC002024
-
-#define YBORDEROFFSET		(640*2 * 32)
-#define CLAMP(x,l,h)		((x > h) ? h : ((x < l) ? l : x))
-#define TENT(a, b, c)		(0.25 * (a) + 0.5 * (b) + 0.25 * (c))
-#define RGB2YCBR(r,g,b)		((u32)(((u8)CLAMP((0.257 * (float)r + 0.504 * (float)g + 0.098 * (float)b +  16.0 + 0.5) , 16, 235) << 24) | ((u8)CLAMP((-0.148 * (float)r - 0.291 * (float)g + 0.439 * (float)b + 128.0 + 0.5), 16, 240) << 16) | ((u8)(0.257 * (float)r + 0.504 * (float)g + 0.098 * (float)b +  16.0 + 0.5) << 8) | (u8)CLAMP((0.439 * (float)r - 0.368 * (float)g - 0.071 * (float)b + 128.0 + 0.5), 16, 240)))
-
-/*** exi definitions ***/
-#define EXI_SR		ebase[0]
-#define EXI_DMA_MEM	ebase[1]
-#define EXI_DMA_LEN	ebase[2]
-#define EXI_CR		ebase[3]
-#define EXI_DATA	ebase[4]
-#define EXI_WAIT_EOT	while((EXI_CR)&1);    
-
-/* time */
-#define TB_CLOCK	40500000
-#define mftb(rval) ({unsigned long u; do { \
-	 asm volatile ("mftbu %0" : "=r" (u)); \
-	 asm volatile ("mftb %0" : "=r" ((rval)->l)); \
-	 asm volatile ("mftbu %0" : "=r" ((rval)->u)); \
-	 } while(u != ((rval)->u)); })
-
-typedef struct {
-	unsigned long l, u;
-} tb_t;
-
-/*** memcard stuff ***/
-#define MEMCARD_EXI_READ_SIZE		0x200
-#define MEMCARD_BLOCK_SIZE			0x2000
-
-#define MEMCARD_A_EXI_REG_BASE 0xCC006800
-#define MEMCARD_B_EXI_REG_BASE 0xCC006814
-
-struct MemCardHeader_t
-{
-	u8 unknown[12];
-	u8 ostimeValue[8];
-	u8 unknown2[12];
-	u16 zeropadding;
-	u16 memcardSizeInBits;
-	u16 encoding;
-	u8 unused[468];
-	u16 updateCounter;
-	u16 checksum1;
-	u16 checksum2;
-	u8 unused2[7680]
-} __attribute__((__packed__));
-
-typedef struct MemCardHeader_t MemCardHeader;
-
-struct DirectoryEntry_t
-{
+struct DirectoryEntry_t {
 	u32 gamecode;
 	u16 makercode;
-	u8 unused;
-	u8 animKey;
-	char filename[32]; // Ptr to a 32 char string
+	u8  unused;
+	u8  bannerFormat;
+	char filename[32];
 	u32 timestamp;
 	u32 imageDataOffset;
-	u16 iconsgfxformat;
-	u16 iconsanimspeed;
-	u8 filePermission;
-	u8 copyCounter;
+	u16 iconFormat;
+	u16 iconSpeed;
+	u8  filePermission;
+	u8  copyCounter;
 	u16 firstBlockIndex;
-	u16 fileLength;
+	u16 fileLength;      /* in blocks, including the header block written by Swiss */
 	u16 unused2;
-	char* commentsStrings; // Apparently points to 2 32 char strings that must fit in a single block 
+	u32 commentOffset;
 } __attribute__((__packed__));
-
 typedef struct DirectoryEntry_t DirectoryEntry;
 
-#define DIRECTORY_SIZE 127
-
-struct Directory_t
-{
+struct Directory_t {
 	DirectoryEntry entries[DIRECTORY_SIZE];
-	u8 padding[0x3A];
+	u8  padding[0x3A];
 	u16 updateCounter;
 	u16 checksum1;
 	u16 checksum2;
 } __attribute__((__packed__));
-
 typedef struct Directory_t Directory;
 
-struct Fat_t
-{
+struct Fat_t {
 	u16 checksum1;
 	u16 checksum2;
 	u16 updateCounter;
 	u16 numFreeBlocks;
-	u16 lastAllocatedBlockindex;
-	u16 blockAllocTable[0xffb];
+	u16 lastAllocatedBlock;
+	u16 blockAllocTable[0xFFB];   /* entry i describes block i + 5 */
 } __attribute__((__packed__));
-
 typedef struct Fat_t Fat;
 
-#define INVALID_BLOCK 0x0000
-#define LAST_BLOCK 0xFFFF
-
-typedef struct
-{
-	MemCardHeader header;
+typedef struct {
+	u8        header[MEMCARD_BLOCK_SIZE];
 	Directory directory1;
 	Directory directory2;
-	Fat fat1;
-	Fat fat2;
+	Fat       fat1;
+	Fat       fat2;
 } MemCard;
 
-#define XENO_DOL_NAME "xeno.dol"
+#endif
