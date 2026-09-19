@@ -36,7 +36,8 @@ extern "C" {
 #define DRIVEMEM_BINARY 0xFF40BBC0
 
 #define IMAGEBASE	0x40D000
-#define VERIFY_FLASH	0
+// NOTE: do not read the chip back (SUB_ReadFlashBlock) inside the write loop: it kills the
+// drive session after the first block and leaves a half written chip.
 
 #define DVD_FlashErase		(IMAGEBASE + 0x04)
 #define DVD_FlashEnable		(IMAGEBASE + 0x07)
@@ -268,18 +269,6 @@ bool FlashUpdate()
       DVD_CallFunc(DVD_WriteFlashBlock);
       CheckDriveState(false);
 
-      #if VERIFY_FLASH == 1
-         // verify chunk
-         //printf("verify one chunk\n");
-         DVD_CallFunc(DVD_ReadFlashBlock);
-         //printf("Set to ReadFlashBlock chunk\n");
-         CheckDriveState(false);
-         DVD_ReadDriveMemBlock(0x40D800, pBuffer, CHUNKSIZE);
-         //printf("ReadDriveMemBlock\n");
-         if(memcmp(pBuffer, pROM, CHUNKSIZE)) {
-            printf("X");
-         }
-      #endif
 
       if(dwAddress % (FLASHSIZE/16) == 0) {
          printf("*");
@@ -291,6 +280,7 @@ bool FlashUpdate()
    dwTime = (gettime() >> 15) - dwTime;
    printf("\n\x1b[32mDONE!");
    printf("   \x1b[37mTime: %d MS\n", (int)dwTime);
+
 
    return true;
 }
@@ -370,8 +360,15 @@ int main ()
    // show title
    unpack_banner();
    DrawTitle();
-   printf("\n\nXenoGC flash v1.03a-v1\n");
+   printf("\n\nXenoGC flash v1.04 (XenoBoot v2)\n");
 
+   // show what we are about to flash so it can be compared with the build output
+   printf("Image: %u bytes, CRC32 %08lX\n", (unsigned)XenoAT_bin_size,
+          (unsigned long)crc32(0, XenoAT_bin, XenoAT_bin_size));
+   if(XenoAT_bin_size != FLASHSIZE) {
+      printf("\x1b[31mImage size is not %d bytes - refusing to flash. Rebuild the flasher.\n", FLASHSIZE);
+      while(1) VIDEO_WaitVSync();
+   }
 
    // assure drive is ready
    InitDrive();
@@ -421,17 +418,7 @@ int main ()
          GC_Sleep(1000);
          FlashErase();
       }
-/*
-      if(buttonsDown & PAD_BUTTON_X) {
-         //-----------------------------------------------
-         // read back flash data
-         //-----------------------------------------------
-         FlashInit();
-         printf("reading flash...\n");
-         DVD_CallFunc(DVD_ReadFlashBlock);
-         CheckDriveState(false);
-         printf("\ndone\n\n");
-      } */
+
    }
 
    return 0;
